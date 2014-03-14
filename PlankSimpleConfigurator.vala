@@ -211,7 +211,6 @@ public class PlankConf : Window {
 	private void loadConfFile() {
 		ConfFile = new INI();
 		ConfFileName = Environment.get_home_dir() + ConfFileNameSuffix;
-		stdout.printf(Environment.get_home_dir());
 		ConfFile.load(ConfFileName);
 	}
 
