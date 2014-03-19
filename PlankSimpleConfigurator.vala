@@ -79,6 +79,7 @@ public class PlankConf : Window {
 		ThemesBox.active = ThemeNumber;
 		ThemesBox.changed.connect (() => {
 			Preferences.Theme = ThemesBox.get_active_text();
+			Preferences.apply();
 			});
 
 		Label ThemesLabel = new Label("Theme:");
