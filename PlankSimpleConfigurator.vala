@@ -1,137 +1,22 @@
 using Gtk;
-
-public class INI {
-	const int TYPE_VALUE = 1;
-	const int TYPE_HEADER = 2;
-	const int TYPE_COMMENT = 3;
-	const int TYPE_EMPTYLINE = 4;
-
-	private string[] Names;
-	private string[] Values;
-	private int[] Types;
-
-	public string filename = "File not loaded!";
-
-	public int load(string filename) {
-		string filerawstr;
-		string[] fileraw;
-		string[] stringraw = new string[2];
-		try {
-			FileUtils.get_contents(filename, out filerawstr);
-		} catch (Error e) {
-			return e.code;
-		}
-		this.filename = filename;
-		fileraw = filerawstr.split("\n");
-		foreach (string str in fileraw) {
-			switch(str[0]) {
-				case '#':
-					Types += TYPE_COMMENT;
-					Names += str;
-					Values += "";
-					break;
-				case '[':
-					Types += TYPE_HEADER;
-					Names += str;
-					Values += "";
-					break;
-				default:
-					if ("=" in str) {
-						Types += TYPE_VALUE;
-						stringraw = str.split("=");
-						Names += stringraw[0];
-						Values += stringraw[1];
-					} else {
-						Types += TYPE_EMPTYLINE;
-						Names += "\n";
-						Values += "";
-					}
-					break;
-			}
-		}
-		return 0;
-	}
-
-	public int save(string filename) {
-		string filerawstr = "";
-		int i = 0;
-
-		while (i < Names.length) {
-			if (Types[i] == TYPE_VALUE) {
-				filerawstr += (Names[i] + "=" + Values[i] + "\n");
-			} else if (Types[i] == TYPE_EMPTYLINE) {
-				filerawstr += "\n";
-			} else {
-				filerawstr += (Names[i] + "\n");
-			}
-			i++;
-		}
-		try {
-			FileUtils.set_contents(filename, filerawstr);
-		} catch (Error e) {
-			GLib.stderr.printf("Error while saving file. Message: %s",e.message);
-			return e.code;
-		}
-		return 0;
-	}
-
-	public string getByNameAndHeader(string Name, string Header) {
-		int i = 0;
-		bool inside = false;
-
-		foreach (string str in Names) {
-			if (inside) {
-				if (str == Name) {
-					return Values[i];
-				}
-			} else {
-				if (Types[i] == TYPE_HEADER) {
-					inside = (str == "[" + Header + "]");
-				}
-			}
-			i++;
-		}
-		stderr.printf("Can't get value by name and header!");
-		return "";
-	}
-
-	public void setByNameAndHeader(string Name, string Header, string Value) {
-		int i = 0;
-		bool inside = false;
-
-		foreach (string str in Names) {
-			if (inside) {
-				if (str == Name) {
-					Values[i] = Value;
-					break;
-				}
-			} else {
-				if (Types[i] == TYPE_HEADER) {
-					inside = (str == "[" + Header + "]");
-				}
-			}
-			i++;
-		}
-	}
-
-}
-
+using Plank;
 
 public class PlankConf : Window {
 	private Scale IconSizeSlider;
 	private Label IconSizeLabel;
-	private INI ConfFile;
 	private string ConfFileName;
 	private const string ConfFileNameSuffix = "/.config/plank/dock1/settings";
 	private Image TestIcon;
 	private SList<string> Themes;
 	private int ThemeNumber;
 	private ComboBoxText ThemesBox;
+	private Plank.DockPreferences Preferences;
+	private GLib.File ConfFile;
 
 	private void FindThemes() {
 		Themes = new SList<string> ();
 		string ThemesDirPath = "/usr/share/plank/themes";
-		string CurrentThemeName = ConfFile.getByNameAndHeader("Theme", "PlankDockPreferences");
+		string CurrentThemeName = Preferences.Theme;
 		int i = 0;
 
 		try {
@@ -171,14 +56,15 @@ public class PlankConf : Window {
 		IconSizeLabel = new Label("Size of icons:");
 		IconSizeSlider = new Scale.with_range(Orientation.HORIZONTAL, 32, 128, 2);
 		int iconsize;
-		iconsize = int.parse(ConfFile.getByNameAndHeader("IconSize", "PlankDockPreferences"));
+		iconsize = Preferences.IconSize;
 		IconSizeSlider.set_value(iconsize);
 		foreach (int i in SizesMarks) {
 			IconSizeSlider.add_mark(i, PositionType.BOTTOM, i.to_string());
 		}
 		IconSizeSlider.adjustment.value_changed.connect (() => {
 			TestIcon.pixel_size = (int) IconSizeSlider.get_value();
-			saveConfFile();
+			Preferences.IconSize = (int) IconSizeSlider.get_value();
+			Preferences.apply();
 		});
 
 		TestIcon = new Image.from_icon_name ("plank", IconSize.LARGE_TOOLBAR);
@@ -191,7 +77,9 @@ public class PlankConf : Window {
 			ThemesBox.append_text(str);
 		}
 		ThemesBox.active = ThemeNumber;
-		ThemesBox.changed.connect (saveConfFile);
+		ThemesBox.changed.connect (() => {
+			Preferences.Theme = ThemesBox.get_active_text();
+			});
 
 		Label ThemesLabel = new Label("Theme:");
 
@@ -209,17 +97,10 @@ public class PlankConf : Window {
 	}
 
 	private void loadConfFile() {
-		ConfFile = new INI();
 		ConfFileName = Environment.get_home_dir() + ConfFileNameSuffix;
-		ConfFile.load(ConfFileName);
+		ConfFile = GLib.File.new_for_path(ConfFileName);
+		Preferences = new Plank.DockPreferences.with_file(ConfFile);
 	}
-
-	private void saveConfFile() {
-		ConfFile.setByNameAndHeader("IconSize", "PlankDockPreferences", IconSizeSlider.get_value().to_string());
-		ConfFile.setByNameAndHeader("Theme", "PlankDockPreferences", ThemesBox.get_active_text());
-		ConfFile.save(ConfFileName);
-	}
-
 
 	public static int main(string[] args) {
 		Gtk.init(ref args);
